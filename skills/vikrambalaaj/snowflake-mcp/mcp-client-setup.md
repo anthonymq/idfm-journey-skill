@@ -1,14 +1,14 @@
-# Cursor Setup Reference
+# MCP Client Setup Reference
 
-Two methods to connect Cursor to Snowflake MCP.
+Use this guide to connect Clawdbot to the Snowflake MCP server.
 
 ## Method 1: Managed Snowflake MCP Server (Recommended)
 
 Uses Snowflake's cloud-hosted MCP server. No local installation required.
 
-### Cursor Configuration
+### Clawdbot Configuration
 
-Create `mcp.json` at project root or add to Cursor Settings → Tools & MCP:
+Create `mcp.json` at your project root:
 
 ```json
 {
@@ -22,6 +22,8 @@ Create `mcp.json` at project root or add to Cursor Settings → Tools & MCP:
   }
 }
 ```
+
+Start a new Clawdbot session and add `mcp.json` as context (or configure MCP servers in Clawdbot settings if available).
 
 ### URL Format
 
@@ -54,7 +56,7 @@ brew install uv
 pip install uv
 ```
 
-### Cursor Configuration
+### Clawdbot Configuration
 
 ```json
 {
@@ -87,7 +89,7 @@ warehouse = "COMPUTE_WH"
 role = "ANALYST_ROLE"
 ```
 
-Then in Cursor:
+Then in `mcp.json`:
 
 ```json
 {
@@ -144,7 +146,5 @@ Then in Cursor:
 
 ## Verification
 
-1. Open **Cursor Settings → Tools & MCP**
-2. Confirm server appears under **Installed Servers**
-3. Check **Output panel → Cursor MCP** for logs
-4. Start a chat and verify tools are available
+1. In Clawdbot, add `mcp.json` to the session context
+2. Ask a question that triggers Snowflake tools (for example, a SQL query)

@@ -1,11 +1,11 @@
 ---
 name: snowflake-mcp
-description: Connect to Snowflake using Model Context Protocol (MCP) server. Use when setting up Snowflake integration with Cursor, querying Snowflake data, configuring Cortex AI services, or when the user mentions Snowflake, data warehouse, or SQL queries against Snowflake.
+description: Connect to the Snowflake Managed MCP server with Clawdbot or other MCP clients. Use when wiring Snowflake MCP endpoints, validating connectivity, or configuring Cortex AI services.
 ---
 
 # Snowflake MCP Connection
 
-Connect your AI assistant to Snowflake using the Managed Snowflake MCP Server. This enables querying data, using Cortex AI services (Analyst, Search, Agents), and executing custom tools directly from Cursor.
+Use this skill to integrate the Snowflake Managed MCP server with Clawdbot. It covers endpoint creation, authentication, and tool validation so Snowflake data can be accessed through MCP.
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ Connect your AI assistant to Snowflake using the Managed Snowflake MCP Server. T
 
 - Snowflake account with ACCOUNTADMIN role
 - Programmatic Access Token (PAT) from Snowflake
-- Cursor IDE
+- Clawdbot or any MCP-compatible client
 
 ### Step 1: Create Programmatic Access Token (PAT)
 
@@ -54,9 +54,9 @@ curl -X POST "https://YOUR-ORG-YOUR-ACCOUNT.snowflakecomputing.com/api/v2/databa
   }'
 ```
 
-### Step 4: Configure Cursor
+### Step 4: Configure Clawdbot
 
-Create `mcp.json` at your project root:
+Create `mcp.json` at your project root (this is the MCP configuration Clawdbot can load for a session):
 
 ```json
 {
@@ -71,13 +71,13 @@ Create `mcp.json` at your project root:
 }
 ```
 
-Or add via **Cursor Settings → Tools & MCP**.
+Start a new Clawdbot session and load `mcp.json` so the MCP connection is active. The Snowflake tools should appear in your session.
 
-### Step 5: Verify in Cursor
+### Step 5: Verify in Clawdbot
 
-1. Open Cursor Settings → Tools & MCP
-2. Confirm **Snowflake MCP Server** appears under Installed Servers
-3. Start a chat and set `mcp.json` as context
+1. Start a new Clawdbot session
+2. Load `mcp.json` for the session
+3. Ask a question that triggers Snowflake tools (for example, a SQL query)
 
 ## MCP Server Examples
 
@@ -235,7 +235,7 @@ curl -X POST "https://YOUR-ACCOUNT.snowflakecomputing.com/api/v2/databases/DB/sc
 
 ## Alternative: Local MCP Server
 
-For local deployment using the `snowflake-labs-mcp` package, see [cursor-setup.md](cursor-setup.md).
+For local deployment using the `snowflake-labs-mcp` package, see [mcp-client-setup.md](mcp-client-setup.md).
 
 ## Resources
 
