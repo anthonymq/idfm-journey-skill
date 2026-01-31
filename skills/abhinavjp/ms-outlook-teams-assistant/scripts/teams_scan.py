@@ -2,9 +2,10 @@
 
 This uses Microsoft Graph + MSAL device code flow (delegated permissions).
 
-Notes:
-- Tenant policy may restrict what can be read.
-- Start minimal (mentions in chats) and expand permissions as needed.
+Improvements vs naive scans:
+- Includes a short message preview so reminders are actionable.
+- Best-effort "already replied" detection in 1:1 chats.
+- If the user replied but clearly deferred ("I'll do it later"), keep nagging.
 
 Usage:
   python scripts/teams_scan.py --config references/config.json --days 7
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -30,13 +32,35 @@ def load_config(path: str) -> dict:
 
 
 def _strip_html(s: str) -> str:
-    # Graph message bodies are HTML. Keep it simple.
-    return (
-        s.replace("<br>", "\n")
-        .replace("<br/>", "\n")
-        .replace("<br />", "\n")
-        .replace("&nbsp;", " ")
-    )
+    """Very small HTML-to-text helper for Graph message bodies.
+
+    Graph returns HTML. We don't want to pull in heavy parsers here.
+    Preserve emoji alt text when present.
+    """
+
+    s = s or ""
+
+    # Newlines
+    s = s.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    s = s.replace("&nbsp;", " ")
+
+    # Preserve Teams emoji alt="😅" etc.
+    s = re.sub(r"<emoji[^>]*\salt=\"([^\"]+)\"[^>]*></emoji>", r"\1", s, flags=re.IGNORECASE)
+
+    # Replace <at ...>Name</at> with Name
+    s = re.sub(r"<at[^>]*>(.*?)</at>", r"\1", s, flags=re.IGNORECASE | re.DOTALL)
+
+    # Drop remaining tags
+    s = re.sub(r"<[^>]+>", "", s)
+
+    return s
+
+
+def _preview(s: str, n: int = 240) -> str:
+    s = re.sub(r"\s+", " ", (s or "").strip())
+    if len(s) <= n:
+        return s
+    return s[: n - 1] + "…"
 
 
 def iso_now() -> str:
@@ -96,18 +120,16 @@ def _parse_graph_dt(s: str) -> datetime:
     """Parse Graph timestamps reliably on Python 3.10.
 
     Graph may return fractional seconds with 1–7 digits.
-    Python 3.10's datetime.fromisoformat is pickier in some builds, so we normalize
-    the fraction to 6 digits.
+    We normalize the fraction to 6 digits.
     """
+
     s = s.replace("Z", "+00:00")
     if "." in s:
         head, tail = s.split(".", 1)
-        # tail like: "37+00:00" or "3701234+00:00"
         if "+" in tail:
             frac, tz = tail.split("+", 1)
             tz = "+" + tz
         elif "-" in tail[1:]:
-            # negative offset
             frac, tz = tail.split("-", 1)
             tz = "-" + tz
         else:
@@ -115,6 +137,30 @@ def _parse_graph_dt(s: str) -> datetime:
         frac = (frac + "000000")[:6]
         s = f"{head}.{frac}{tz}"
     return datetime.fromisoformat(s)
+
+
+def _is_deferral(text: str) -> bool:
+    """Heuristic: user replied but explicitly deferred the action."""
+
+    t = (text or "").lower()
+    patterns = [
+        "later",
+        "tomorrow",
+        "next week",
+        "after some time",
+        "in some time",
+        "will do",
+        "i'll do",
+        "i will do",
+        "will check",
+        "i'll check",
+        "i will check",
+        "will get back",
+        "i'll get back",
+        "remind me",
+        "ping me",
+    ]
+    return any(p in t for p in patterns)
 
 
 def main() -> int:
@@ -128,7 +174,6 @@ def main() -> int:
 
     since = datetime.now(timezone.utc) - timedelta(days=args.days)
 
-    # Cache /me once
     me = graph_get(token, "https://graph.microsoft.com/v1.0/me")
     my_id = me.get("id")
 
@@ -138,10 +183,8 @@ def main() -> int:
     include_one_on_one = bool(monitor.get("includeOneOnOne", True))
     include_group = bool(monitor.get("includeGroup", True))
 
-    items = []
+    items: list[dict] = []
 
-    # 1) Get recent chats
-    # Requires: Chat.Read (delegated)
     max_chats = int(monitor.get("maxChats", 20))
     max_msgs = int(monitor.get("maxMessagesPerChat", 20))
 
@@ -158,12 +201,15 @@ def main() -> int:
         if (not is_group) and (not include_one_on_one):
             continue
 
-        # 2) Get last messages in the chat
         msgs = graph_get(
             token,
             f"https://graph.microsoft.com/v1.0/chats/{chat_id}/messages",
             params={"$top": max_msgs, "$orderby": "createdDateTime desc"},
         )
+
+        latest_my_reply_dt: datetime | None = None
+        latest_my_reply_text: str = ""
+
         for m in msgs.get("value", []):
             created = m.get("createdDateTime")
             if not created:
@@ -180,8 +226,10 @@ def main() -> int:
             from_name = frm.get("displayName", "")
             from_id = frm.get("id", "")
 
-            # Skip your own messages
             if my_id and from_id and from_id == my_id:
+                if latest_my_reply_dt is None:
+                    latest_my_reply_dt = created_dt
+                    latest_my_reply_text = body_text
                 continue
 
             mentions = m.get("mentions") or []
@@ -191,11 +239,9 @@ def main() -> int:
                 else False
             )
 
-            # Broadcast-ish: mentions include a non-user entity like "Everyone" / "Team" or body contains @everyone
             mentioned_all = False
             for x in mentions:
                 mentioned = (x.get("mentioned") or {})
-                # Sometimes Graph returns conversation identity mentions
                 display = (mentioned.get("displayName") or "")
                 if display and display.lower() in ("everyone", "all", "team"):
                     mentioned_all = True
@@ -205,32 +251,34 @@ def main() -> int:
             is_question = "?" in body_text
             keyword_hits = [k for k in action_keywords if k and k in body_l]
 
-            # Determine if it likely warrants a reply.
-            # - 1:1 chats: treat questions/keywords as needing a reply
-            # - group chats: only if you are mentioned OR broadcast-ish (flag separately)
             needs_reply = False
-            reason = []
-            if not is_group:
+            reason: list[str] = []
+
+            if (chat_type not in ("group", "meeting")):
                 if is_question:
                     needs_reply = True
                     reason.append("question")
                 if keyword_hits:
                     needs_reply = True
                     reason.append("keywords: " + ", ".join(sorted(set(keyword_hits))[:5]))
+
+                replied_after = bool(latest_my_reply_dt and latest_my_reply_dt > created_dt)
+                deferred = bool(replied_after and _is_deferral(latest_my_reply_text))
+                if needs_reply and replied_after and not deferred:
+                    needs_reply = False
+                    reason.append("replied_after")
+                elif needs_reply and replied_after and deferred:
+                    reason.append("replied_after_deferral")
+
             else:
                 if mentioned_me and bool(monitor.get("flagGroupIfMentionedMe", True)):
                     needs_reply = True
                     reason.append("mentioned_you")
                 if mentioned_all and bool(monitor.get("flagGroupBroadcast", True)):
-                    # Broadcast messages might not need reply, but you asked to highlight them.
                     reason.append("broadcast")
-                    # Do not force needs_reply unless also a question.
                     if is_question or keyword_hits:
                         needs_reply = True
 
-            # Still "monitor all" means we keep items even if not needing reply,
-            # but we only emit items that are within last N days and from others.
-            # We include a classification so the nagger can decide.
             items.append(
                 {
                     "kind": "teams.chat.message",
@@ -238,29 +286,35 @@ def main() -> int:
                     "chatType": chat.get("chatType"),
                     "topic": chat.get("topic"),
                     "messageId": m.get("id"),
+                    "webUrl": m.get("webUrl"),
                     "created": created,
                     "from": from_name,
+                    "fromId": from_id,
+                    "preview": _preview(body_text, 240),
                     "mentionedMe": bool(mentioned_me),
                     "broadcast": bool(mentioned_all),
                     "question": bool(is_question),
                     "keywordHits": keyword_hits[:8],
                     "needsReply": bool(needs_reply),
                     "reason": "; ".join(reason) if reason else "",
+                    "myReplyCreated": latest_my_reply_dt.isoformat(timespec="seconds") if latest_my_reply_dt else None,
+                    "myReplyPreview": _preview(latest_my_reply_text, 120) if latest_my_reply_text else "",
                 }
             )
 
-    print(
-        json.dumps(
-            {
-                "generatedAt": iso_now(),
-                "since": since.isoformat(timespec="seconds"),
-                "count": len(items),
-                "items": items[:50],
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
+    # Windows console may be cp1252; ensure we can print emojis/unicode.
+    payload = json.dumps(
+        {
+            "generatedAt": iso_now(),
+            "since": since.isoformat(timespec="seconds"),
+            "count": len(items),
+            "items": items[:50],
+        },
+        ensure_ascii=False,
+        indent=2,
     )
+    sys.stdout.buffer.write(payload.encode("utf-8"))
+    sys.stdout.buffer.write(b"\n")
 
     return 0
 

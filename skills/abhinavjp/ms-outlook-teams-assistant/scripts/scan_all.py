@@ -36,10 +36,22 @@ def _run_json_to_file(cmd: list[str], cwd: str, timeout_s: int, out_path: str) -
     Avoids deadlocks from large stdout when using capture_output.
     """
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as out_f:
-        p = subprocess.run(cmd, cwd=cwd, stdout=out_f, stderr=subprocess.PIPE, text=True, timeout=timeout_s)
+
+    # Important: don't pipe stderr. Some tools (notably MSAL device-code flows)
+    # can print a lot to stderr, which can deadlock if piped.
+    err_path = out_path + ".stderr.txt"
+    with open(out_path, "w", encoding="utf-8") as out_f, open(err_path, "w", encoding="utf-8") as err_f:
+        p = subprocess.run(cmd, cwd=cwd, stdout=out_f, stderr=err_f, text=True, timeout=timeout_s)
+
     if p.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(cmd)}\nSTDERR:\n{p.stderr}")
+        stderr = ""
+        try:
+            with open(err_path, "r", encoding="utf-8") as f:
+                stderr = f.read()
+        except Exception:
+            stderr = "(failed to read stderr log)"
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\nSTDERR:\n{stderr}")
+
     return _load_json(out_path)
 
 
