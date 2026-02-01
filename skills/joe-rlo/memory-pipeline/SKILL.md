@@ -1,6 +1,6 @@
 ---
 name: memory-pipeline
-description: Complete agent memory + performance system. Extracts structured facts, builds knowledge graphs, generates briefings, and enforces execution discipline via pre-game routines, tool policies, result compression, and after-action reviews. Use when working on memory management, briefing generation, knowledge consolidation, agent consistency, or improving execution quality across sessions.
+description: Complete agent memory + performance system. Extracts structured facts, builds knowledge graphs, generates briefings, and enforces execution discipline via pre-game routines, tool policies, result compression, and after-action reviews. Includes external knowledge ingestion (ChatGPT exports, etc.) into searchable memory. Use when working on memory management, briefing generation, knowledge consolidation, external data ingestion, agent consistency, or improving execution quality across sessions.
 ---
 
 # Memory Pipeline + Performance Routine
@@ -8,6 +8,7 @@ description: Complete agent memory + performance system. Extracts structured fac
 A complete memory and performance system for AI agents. Two subsystems, one package:
 
 - **Memory Pipeline** (Python scripts) — Extracts facts, builds knowledge graphs, generates daily briefings
+- **Knowledge Ingestion** (Python scripts) — Imports external data (ChatGPT exports, etc.) into searchable memory
 - **Performance Routine** (TypeScript hooks) — Pre-game briefing injection, tool discipline, output compression, after-action review
 
 ## What This Does
@@ -63,6 +64,76 @@ python3 skills/memory-pipeline/scripts/memory-extract.py
 python3 skills/memory-pipeline/scripts/memory-link.py
 python3 skills/memory-pipeline/scripts/memory-briefing.py
 ```
+
+## External Knowledge Ingestion
+
+Import data from external sources into the memory system. Ingested files land in `memory/knowledge/` and are automatically indexed by Clawdbot's semantic search (`memory_search`).
+
+### ChatGPT Export
+
+**Script:** `ingest-chatgpt.py`
+
+Parses a ChatGPT data export and converts conversations into searchable markdown files.
+
+**Usage:**
+```bash
+# From a zip (direct from ChatGPT export email)
+python3 skills/memory-pipeline/scripts/ingest-chatgpt.py ~/imports/chatgpt-export.zip
+
+# From extracted conversations.json
+python3 skills/memory-pipeline/scripts/ingest-chatgpt.py ~/imports/conversations.json
+
+# Preview without writing files
+python3 skills/memory-pipeline/scripts/ingest-chatgpt.py ~/imports/conversations.json --dry-run
+
+# Keep everything (no filtering)
+python3 skills/memory-pipeline/scripts/ingest-chatgpt.py ~/imports/conversations.json --keep-all
+
+# Stricter filtering (5+ turns, 500+ chars)
+python3 skills/memory-pipeline/scripts/ingest-chatgpt.py ~/imports/conversations.json --min-turns 5 --min-length 500
+```
+
+**How to export from ChatGPT:**
+1. Go to ChatGPT → Settings → Data Controls → Export Data
+2. OpenAI emails you a zip file
+3. Download and pass the zip (or extracted `conversations.json`) to the script
+
+**What it does:**
+- Parses the conversation tree structure from ChatGPT's export format
+- Extracts title, date, and full Q&A content from each conversation
+- Filters out short/throwaway conversations (configurable thresholds)
+- Supports topic exclusion filters (edit `EXCLUDE_PATTERNS` in the script to skip unwanted topics)
+- Generates clean markdown files with date-prefixed slugified filenames
+- Outputs to `memory/knowledge/chatgpt/`
+
+**Output format:**
+```markdown
+# Conversation Title
+**Source:** ChatGPT | **Date:** 2025-03-15 | **Turns:** 8
+
+## Q: User's question here
+...
+
+Assistant's response here
+...
+```
+
+**Topic exclusion:** The script includes an `EXCLUDE_PATTERNS` list for filtering out conversations by keyword (checked against title + first few user messages). Edit the list in the script to customize which topics get excluded.
+
+**After ingestion:** Files in `memory/knowledge/` are automatically picked up by Clawdbot's memory indexer on the next sync cycle. Once indexed, all conversations become searchable via `memory_search`.
+
+### Adding Other Sources
+
+The ingestion pattern is extensible. To add a new source (e.g., Google Search history, Notion exports, browser bookmarks):
+
+1. Create a new `ingest-<source>.py` script in `scripts/`
+2. Parse the source format into structured entries
+3. Write markdown files to `memory/knowledge/<source>/`
+4. Follow the same format: title, date, source metadata, content
+
+The key principle: **chunk by topic, write as markdown, let the indexer handle search.**
+
+---
 
 ## Pipeline Stages
 

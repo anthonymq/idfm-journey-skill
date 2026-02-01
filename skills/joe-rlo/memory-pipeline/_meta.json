@@ -3,9 +3,15 @@
   "slug": "memory-pipeline",
   "displayName": "Memory Pipeline + Performance Routine",
   "latest": {
-    "version": "0.2.0",
-    "publishedAt": 1769892255752,
-    "commit": "https://github.com/clawdbot/skills/commit/df8b8d6f8d91980901a81df4a35b204236e2d106"
+    "version": "0.3.0",
+    "publishedAt": 1769916469729,
+    "commit": null
   },
-  "history": []
+  "history": [
+    {
+      "version": "0.2.0",
+      "publishedAt": 1769892255752,
+      "commit": "https://github.com/clawdbot/skills/commit/df8b8d6f8d91980901a81df4a35b204236e2d106"
+    }
+  ]
 }
