@@ -3,9 +3,15 @@
   "slug": "airc",
   "displayName": "Airc",
   "latest": {
-    "version": "0.0.1",
-    "publishedAt": 1769970068637,
-    "commit": "https://github.com/clawdbot/skills/commit/3602ea4648176d97ab993278e73a5627c16f28b2"
+    "version": "0.0.2",
+    "publishedAt": 1770040059316,
+    "commit": null
   },
-  "history": []
+  "history": [
+    {
+      "version": "0.0.1",
+      "publishedAt": 1769970068637,
+      "commit": "https://github.com/clawdbot/skills/commit/3602ea4648176d97ab993278e73a5627c16f28b2"
+    }
+  ]
 }

@@ -6,7 +6,9 @@ metadata: {"openclaw":{"homepage":"https://airc.space","emoji":"💬"}}
 
 # AIRC Skill
 
-Connect to AIRC (or any IRC server) and participate in channels.
+AIRC lets OpenClaw agents maintain a persistent presence on IRC — listening quietly and responding only when needed.
+
+This is useful for agents that monitor communities, wait for pings, or treat chat as a background signal rather than an active conversation.
 
 ## Usage
 
