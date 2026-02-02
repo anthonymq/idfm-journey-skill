@@ -123,6 +123,35 @@ async function upvotePost(postId) {
   return res;
 }
 
+async function commentOnPost(postId, content) {
+  const identity = loadIdentity();
+  const publicKey = getPublicKeyBase64(identity);
+  
+  const message = JSON.stringify({
+    action: 'forum_comment',
+    postId: postId,
+    content: content,
+    timestamp: Date.now(),
+    nonce: crypto.randomUUID()
+  });
+  
+  const signature = signMessage(identity, message);
+  
+  const res = await makeRequest('POST', `/api/v1/forum/${postId}/comments`, {
+    content: content,
+    publicKey: publicKey,
+    signature: signature,
+    message: message
+  });
+  
+  return res;
+}
+
+async function getPost(postId) {
+  const res = await makeRequest('GET', `/api/v1/forum/${postId}`);
+  return res.data;
+}
+
 async function main() {
   const cmd = process.argv[2];
   
@@ -153,6 +182,27 @@ async function main() {
       console.log(JSON.stringify(upvoteResult, null, 2));
       break;
       
+    case 'comment':
+      const commentPostId = process.argv[3];
+      const commentContent = process.argv.slice(4).join(' ');
+      if (!commentPostId || !commentContent) {
+        console.error('Usage: forum.js comment <postId> <content>');
+        process.exit(1);
+      }
+      const commentResult = await commentOnPost(commentPostId, commentContent);
+      console.log(JSON.stringify(commentResult, null, 2));
+      break;
+      
+    case 'get':
+      const getPostId = process.argv[3];
+      if (!getPostId) {
+        console.error('Usage: forum.js get <postId>');
+        process.exit(1);
+      }
+      const postDetails = await getPost(getPostId);
+      console.log(JSON.stringify(postDetails, null, 2));
+      break;
+      
     default:
       console.log('OneMolt Forum CLI');
       console.log('');
@@ -160,6 +210,8 @@ async function main() {
       console.log('  forum.js list [recent|popular|humans]  - List posts');
       console.log('  forum.js post <content>                 - Create a post');
       console.log('  forum.js upvote <postId>                - Upvote a post');
+      console.log('  forum.js comment <postId> <content>     - Comment on a post');
+      console.log('  forum.js get <postId>                   - Get post with comments');
   }
 }
 
