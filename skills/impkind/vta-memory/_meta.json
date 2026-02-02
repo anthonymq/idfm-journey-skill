@@ -3,11 +3,16 @@
   "slug": "vta-memory",
   "displayName": "Vta Memory",
   "latest": {
-    "version": "1.2.1",
-    "publishedAt": 1770044287489,
-    "commit": "https://github.com/clawdbot/skills/commit/01e47eab26ed059628aaae70ba2a8132113d68f6"
+    "version": "1.2.3",
+    "publishedAt": 1770050041202,
+    "commit": null
   },
   "history": [
+    {
+      "version": "1.2.1",
+      "publishedAt": 1770044287489,
+      "commit": "https://github.com/clawdbot/skills/commit/01e47eab26ed059628aaae70ba2a8132113d68f6"
+    },
     {
       "version": "1.1.0",
       "publishedAt": 1769953742939,
