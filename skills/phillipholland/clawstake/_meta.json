@@ -3,11 +3,16 @@
   "slug": "clawstake",
   "displayName": "Clawstake",
   "latest": {
-    "version": "3.0.10",
-    "publishedAt": 1770066740303,
-    "commit": "https://github.com/clawdbot/skills/commit/be197a47412ce195a21c17418bf38e0165af414e"
+    "version": "3.3.0",
+    "publishedAt": 1770088451081,
+    "commit": null
   },
   "history": [
+    {
+      "version": "3.0.10",
+      "publishedAt": 1770066740303,
+      "commit": "https://github.com/clawdbot/skills/commit/be197a47412ce195a21c17418bf38e0165af414e"
+    },
     {
       "version": "3.0.9",
       "publishedAt": 1770009192521,
