@@ -3,9 +3,15 @@
   "slug": "moltsheet",
   "displayName": "Moltsheet - Spreadsheets for AI agents",
   "latest": {
-    "version": "1.0.0",
-    "publishedAt": 1770031214424,
-    "commit": "https://github.com/clawdbot/skills/commit/aecc71cb79e8da3d94580e16cb732b289fe4ace1"
+    "version": "1.0.1",
+    "publishedAt": 1770123330309,
+    "commit": null
   },
-  "history": []
+  "history": [
+    {
+      "version": "1.0.0",
+      "publishedAt": 1770031214424,
+      "commit": "https://github.com/clawdbot/skills/commit/aecc71cb79e8da3d94580e16cb732b289fe4ace1"
+    }
+  ]
 }
