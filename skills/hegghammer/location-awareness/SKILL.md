@@ -1,6 +1,6 @@
 ---
 name: location-awareness
-description: Location awareness via GPS tracking. Use for questions about: current location, location history (when was I last at, last time I visited, have I been to, how long since), travel time/ETA, distance to places, nearby POIs, geofences, and location-based reminders. Supports Home Assistant, OwnTracks, HTTP, or file-based providers.
+description: Location awareness via privacy-friendly GPS tracking (Home Assistant, OwnTracks, GPS Logger). Set location-based reminders and ask about movement history, travel time, and nearby POIs. 
 metadata: {"clawdbot":{"emoji":"📍","requires":{"bins":["python3"]}}}
 ---
 
