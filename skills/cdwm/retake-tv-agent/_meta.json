@@ -1,0 +1,11 @@
+{
+  "owner": "cdwm",
+  "slug": "retake-tv-agent",
+  "displayName": "Retake.tv Agent Live Streaming",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1770073742323,
+    "commit": null
+  },
+  "history": []
+}
