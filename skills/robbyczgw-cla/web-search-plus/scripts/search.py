@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 
 
 # =============================================================================
@@ -66,7 +67,7 @@ DEFAULT_CONFIG = {
     "auto_routing": {
         "enabled": True,
         "fallback_provider": "serper",
-        "provider_priority": ["serper", "tavily", "exa"],
+        "provider_priority": ["serper", "tavily", "exa", "you", "searxng"],
         "disabled_providers": [],
         "confidence_threshold": 0.3,  # Below this, note low confidence
     },
@@ -81,6 +82,16 @@ DEFAULT_CONFIG = {
     },
     "exa": {
         "type": "neural"
+    },
+    "you": {
+        "country": "us",
+        "safesearch": "moderate"
+    },
+    "searxng": {
+        "instance_url": None,  # Required - user must set their own instance
+        "safesearch": 0,  # 0=off, 1=moderate, 2=strict
+        "engines": None,  # Optional list of engines to use
+        "language": "en"
     }
 }
 
@@ -112,7 +123,13 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
     """Get API key for provider from config.json or environment.
     
     Priority: config.json > .env > environment variable
+    
+    Note: SearXNG doesn't require an API key, but returns instance_url if configured.
     """
+    # Special case: SearXNG uses instance_url instead of API key
+    if provider == "searxng":
+        return get_searxng_instance_url(config)
+    
     # Check config.json first
     if config:
         provider_config = config.get(provider, {})
@@ -126,8 +143,27 @@ def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
         "serper": "SERPER_API_KEY",
         "tavily": "TAVILY_API_KEY",
         "exa": "EXA_API_KEY",
+        "you": "YOU_API_KEY",
     }
     return os.environ.get(key_map.get(provider, ""))
+
+
+def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
+    """Get SearXNG instance URL from config or environment.
+    
+    SearXNG is self-hosted, so no API key needed - just the instance URL.
+    Priority: config.json > SEARXNG_INSTANCE_URL environment variable
+    """
+    # Check config.json first
+    if config:
+        searxng_config = config.get("searxng", {})
+        if isinstance(searxng_config, dict):
+            url = searxng_config.get("instance_url")
+            if url:
+                return url
+    
+    # Then check environment
+    return os.environ.get("SEARXNG_INSTANCE_URL")
 
 
 # Backward compatibility alias
@@ -137,20 +173,50 @@ def get_env_key(provider: str) -> Optional[str]:
 
 
 def validate_api_key(provider: str, config: Dict[str, Any] = None) -> str:
-    """Validate and return API key, with helpful error messages."""
+    """Validate and return API key (or instance URL for SearXNG), with helpful error messages."""
     key = get_api_key(provider, config)
+    
+    # Special handling for SearXNG - it needs instance URL, not API key
+    if provider == "searxng":
+        if not key:
+            error_msg = {
+                "error": "Missing SearXNG instance URL",
+                "env_var": "SEARXNG_INSTANCE_URL",
+                "how_to_fix": [
+                    "1. Set up your own SearXNG instance: https://docs.searxng.org/admin/installation.html",
+                    "2. Add to config.json: \"searxng\": {\"instance_url\": \"https://your-instance.example.com\"}",
+                    "3. Or set environment variable: export SEARXNG_INSTANCE_URL=\"https://your-instance.example.com\"",
+                    "Note: SearXNG requires a self-hosted instance with JSON format enabled.",
+                ],
+                "provider": provider
+            }
+            print(json.dumps(error_msg, indent=2), file=sys.stderr)
+            sys.exit(1)
+        
+        # Validate URL format
+        if not key.startswith(("http://", "https://")):
+            print(json.dumps({
+                "error": "SearXNG instance URL must start with http:// or https://",
+                "provided": key,
+                "provider": provider
+            }, indent=2), file=sys.stderr)
+            sys.exit(1)
+        
+        return key
     
     if not key:
         env_var = {
             "serper": "SERPER_API_KEY",
             "tavily": "TAVILY_API_KEY", 
-            "exa": "EXA_API_KEY"
+            "exa": "EXA_API_KEY",
+            "you": "YOU_API_KEY"
         }[provider]
         
         urls = {
             "serper": "https://serper.dev",
             "tavily": "https://tavily.com",
-            "exa": "https://exa.ai"
+            "exa": "https://exa.ai",
+            "you": "https://api.you.com"
         }
         
         error_msg = {
@@ -413,6 +479,86 @@ class QueryAnalyzer:
         r'\blast (week|month|year)\b': 2.0,
     }
     
+    # RAG/AI signals → You.com
+    # You.com excels at providing LLM-ready snippets and combined web+news
+    RAG_SIGNALS = {
+        # RAG/context patterns (strong signal for You.com)
+        r'\brag\b': 4.5,
+        r'\bcontext for\b': 4.0,
+        r'\bsummarize\b': 3.5,
+        r'\bbrief(ly)?\b': 3.0,
+        r'\bquick overview\b': 3.5,
+        r'\btl;?dr\b': 4.0,
+        r'\bkey (points|facts|info)\b': 3.5,
+        r'\bmain (points|takeaways)\b': 3.5,
+        
+        # Combined web + news queries
+        r'\b(web|online)\s+and\s+news\b': 4.0,
+        r'\ball sources\b': 3.5,
+        r'\bcomprehensive (search|overview)\b': 3.5,
+        r'\blatest\s+(news|updates)\b': 3.0,
+        r'\bcurrent (events|situation|status)\b': 3.5,
+        
+        # Real-time information needs
+        r'\bright now\b': 3.0,
+        r'\bas of today\b': 3.5,
+        r'\bup.to.date\b': 3.5,
+        r'\breal.time\b': 4.0,
+        r'\blive\b': 2.5,
+        
+        # Information synthesis
+        r'\bwhat\'?s happening with\b': 3.5,
+        r'\bwhat\'?s the latest\b': 4.0,
+        r'\bupdates?\s+on\b': 3.5,
+        r'\bstatus of\b': 3.0,
+        r'\bsituation (in|with|around)\b': 3.5,
+    }
+    
+    # Privacy/Multi-source signals → SearXNG (self-hosted meta-search)
+    # SearXNG is ideal for privacy-focused queries and aggregating multiple sources
+    PRIVACY_SIGNALS = {
+        # Privacy signals (very strong)
+        r'\bprivate(ly)?\b': 4.0,
+        r'\banonymous(ly)?\b': 4.0,
+        r'\bwithout tracking\b': 4.5,
+        r'\bno track(ing)?\b': 4.5,
+        r'\bprivacy\b': 3.5,
+        r'\bprivacy.?focused\b': 4.5,
+        r'\bprivacy.?first\b': 4.5,
+        r'\bduckduckgo alternative\b': 4.5,
+        r'\bprivate search\b': 5.0,
+        
+        # German privacy signals
+        r'\bprivat\b': 4.0,
+        r'\banonym\b': 4.0,
+        r'\bohne tracking\b': 4.5,
+        r'\bdatenschutz\b': 4.0,
+        
+        # Multi-source aggregation signals
+        r'\baggregate results?\b': 4.0,
+        r'\bmultiple sources?\b': 4.0,
+        r'\bdiverse (results|perspectives|sources)\b': 4.0,
+        r'\bfrom (all|multiple|different) (engines?|sources?)\b': 4.5,
+        r'\bmeta.?search\b': 5.0,
+        r'\ball engines?\b': 4.0,
+        
+        # German multi-source signals
+        r'\bverschiedene quellen\b': 4.0,
+        r'\baus mehreren quellen\b': 4.0,
+        r'\balle suchmaschinen\b': 4.5,
+        
+        # Budget/free signals (SearXNG is self-hosted = $0 API cost)
+        r'\bfree search\b': 3.5,
+        r'\bno api cost\b': 4.0,
+        r'\bself.?hosted search\b': 5.0,
+        r'\bzero cost\b': 3.5,
+        r'\bbudget\b(?!\s*(laptop|phone|option))\b': 2.5,  # "budget" alone, not "budget laptop"
+        
+        # German budget signals
+        r'\bkostenlos(e)?\s+suche\b': 3.5,
+        r'\bkeine api.?kosten\b': 4.0,
+    }
+    
     # Brand/product patterns for shopping detection
     BRAND_PATTERNS = [
         # Tech brands
@@ -588,6 +734,12 @@ class QueryAnalyzer:
         local_news_score, local_news_matches = self._calculate_signal_score(
             query, self.LOCAL_NEWS_SIGNALS
         )
+        rag_score, rag_matches = self._calculate_signal_score(
+            query, self.RAG_SIGNALS
+        )
+        privacy_score, privacy_matches = self._calculate_signal_score(
+            query, self.PRIVACY_SIGNALS
+        )
         
         # Apply product/brand bonus to shopping
         brand_bonus = self._detect_product_brand_combo(query)
@@ -627,6 +779,8 @@ class QueryAnalyzer:
             "serper": shopping_score + local_news_score + (recency_score * 0.5),
             "tavily": research_score + (complexity["complexity_score"] if not complexity["is_complex"] else 0),
             "exa": discovery_score,
+            "you": rag_score + (recency_score * 0.3),  # You.com good for real-time + RAG
+            "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
         }
         
         # Build match details per provider
@@ -634,6 +788,8 @@ class QueryAnalyzer:
             "serper": shopping_matches + local_news_matches,
             "tavily": research_matches,
             "exa": discovery_matches,
+            "you": rag_matches,
+            "searxng": privacy_matches,
         }
         
         return {
@@ -678,7 +834,7 @@ class QueryAnalyzer:
         total_score = sum(available.values()) or 1.0
         
         # Handle ties using priority
-        priority = self.auto_config.get("provider_priority", ["serper", "tavily", "exa"])
+        priority = self.auto_config.get("provider_priority", ["serper", "tavily", "exa", "you", "searxng"])
         winners = [p for p, s in available.items() if s == max_score]
         
         if len(winners) > 1:
@@ -783,6 +939,7 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             "shopping_signals": len(analysis["provider_matches"]["serper"]),
             "research_signals": len(analysis["provider_matches"]["tavily"]),
             "discovery_signals": len(analysis["provider_matches"]["exa"]),
+            "rag_signals": len(analysis["provider_matches"]["you"]),
         },
         "query_analysis": {
             "word_count": analysis["complexity"]["word_count"],
@@ -800,7 +957,7 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "tavily", "exa"] 
+            p for p in ["serper", "tavily", "exa", "you", "searxng"] 
             if get_env_key(p) and p not in config.get("auto_routing", {}).get("disabled_providers", [])
         ]
     }
@@ -1073,6 +1230,301 @@ def search_exa(
 
 
 # =============================================================================
+# You.com (LLM-Ready Web & News Search)
+# =============================================================================
+
+def search_you(
+    query: str,
+    api_key: str,
+    max_results: int = 5,
+    country: str = "US",
+    language: str = "en",
+    freshness: Optional[str] = None,
+    safesearch: str = "moderate",
+    include_news: bool = True,
+    livecrawl: Optional[str] = None,
+) -> dict:
+    """Search using You.com (LLM-Ready Web & News Search).
+    
+    You.com excels at:
+    - RAG applications with pre-extracted snippets
+    - Combined web + news results in one call
+    - Real-time information with automatic news classification
+    - Clean, structured JSON optimized for AI consumption
+    
+    Args:
+        query: Search query
+        api_key: You.com API key
+        max_results: Maximum results to return (default 5, max 100)
+        country: ISO 3166-2 country code (e.g., US, GB, DE)
+        language: BCP 47 language code (e.g., en, de, fr)
+        freshness: Filter by recency: day, week, month, year, or YYYY-MM-DDtoYYYY-MM-DD
+        safesearch: Content filter: off, moderate (default), strict
+        include_news: Include news results when relevant (default True)
+        livecrawl: Fetch full page content: "web", "news", or "all"
+    """
+    endpoint = "https://ydc-index.io/v1/search"
+    
+    # Build query parameters
+    params = {
+        "query": query,
+        "count": max_results,
+        "safesearch": safesearch,
+    }
+    
+    if country:
+        params["country"] = country.upper()
+    if language:
+        params["language"] = language.upper()
+    if freshness:
+        params["freshness"] = freshness
+    if livecrawl:
+        params["livecrawl"] = livecrawl
+        params["livecrawl_formats"] = "markdown"
+    
+    # Build URL with query params (URL-encode values)
+    query_string = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
+    url = f"{endpoint}?{query_string}"
+    
+    headers = {
+        "X-API-KEY": api_key,
+        "Accept": "application/json",
+        "User-Agent": "ClawdBot-WebSearchPlus/2.4",
+    }
+    
+    # Make GET request (You.com uses GET, not POST)
+    from urllib.request import Request, urlopen
+    req = Request(url, headers=headers, method="GET")
+    
+    try:
+        with urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else str(e)
+        try:
+            error_json = json.loads(error_body)
+            error_detail = error_json.get("error") or error_json.get("message") or error_body
+        except json.JSONDecodeError:
+            error_detail = error_body[:500]
+        
+        error_messages = {
+            401: "Invalid or expired API key. Get one at https://api.you.com",
+            403: "Access forbidden. Check your API key permissions.",
+            429: "Rate limit exceeded. Please wait and try again.",
+            500: "You.com server error. Try again later.",
+            503: "You.com service unavailable."
+        }
+        friendly_msg = error_messages.get(e.code, f"API error: {error_detail}")
+        raise Exception(f"{friendly_msg} (HTTP {e.code})")
+    
+    # Parse results
+    results_data = data.get("results", {})
+    web_results = results_data.get("web", [])
+    news_results = results_data.get("news", []) if include_news else []
+    metadata = data.get("metadata", {})
+    
+    # Normalize web results
+    results = []
+    for i, item in enumerate(web_results[:max_results]):
+        snippets = item.get("snippets", [])
+        snippet = snippets[0] if snippets else item.get("description", "")
+        
+        result = {
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "snippet": snippet,
+            "score": round(1.0 - i * 0.05, 3),  # Assign descending score
+            "date": item.get("page_age"),
+            "source": "web",
+        }
+        
+        # Include additional snippets if available (great for RAG)
+        if len(snippets) > 1:
+            result["additional_snippets"] = snippets[1:3]
+        
+        # Include thumbnail and favicon for UI display
+        if item.get("thumbnail_url"):
+            result["thumbnail"] = item["thumbnail_url"]
+        if item.get("favicon_url"):
+            result["favicon"] = item["favicon_url"]
+        
+        # Include live-crawled content if available
+        if item.get("contents"):
+            result["raw_content"] = item["contents"].get("markdown") or item["contents"].get("html", "")
+        
+        results.append(result)
+    
+    # Add news results (if any)
+    news = []
+    for item in news_results[:5]:
+        news.append({
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "snippet": item.get("description", ""),
+            "date": item.get("page_age"),
+            "thumbnail": item.get("thumbnail_url"),
+            "source": "news",
+        })
+    
+    # Build answer from best snippets
+    answer = ""
+    if results:
+        # Combine top snippets for LLM context
+        top_snippets = []
+        for r in results[:3]:
+            if r.get("snippet"):
+                top_snippets.append(r["snippet"])
+        answer = " ".join(top_snippets)[:1000]
+    
+    return {
+        "provider": "you",
+        "query": query,
+        "results": results,
+        "news": news,
+        "images": [],
+        "answer": answer,
+        "metadata": {
+            "search_uuid": metadata.get("search_uuid"),
+            "latency": metadata.get("latency"),
+        }
+    }
+
+
+# =============================================================================
+# SearXNG (Privacy-First Meta-Search)
+# =============================================================================
+
+def search_searxng(
+    query: str,
+    instance_url: str,
+    max_results: int = 5,
+    categories: Optional[List[str]] = None,
+    engines: Optional[List[str]] = None,
+    language: str = "en",
+    time_range: Optional[str] = None,
+    safesearch: int = 0,
+) -> dict:
+    """Search using SearXNG (self-hosted privacy-first meta-search).
+    
+    SearXNG excels at:
+    - Privacy-preserving search (no tracking, no profiling)
+    - Multi-source aggregation (70+ upstream engines)
+    - $0 API cost (self-hosted)
+    - Diverse perspectives from multiple search engines
+    
+    Args:
+        query: Search query
+        instance_url: URL of your SearXNG instance (required)
+        max_results: Maximum results to return (default 5)
+        categories: Search categories (general, images, news, videos, etc.)
+        engines: Specific engines to use (google, bing, duckduckgo, etc.)
+        language: Language code (e.g., en, de, fr)
+        time_range: Filter by recency: day, week, month, year
+        safesearch: Content filter: 0=off, 1=moderate, 2=strict
+    
+    Note:
+        Requires a self-hosted SearXNG instance with JSON format enabled.
+        See: https://docs.searxng.org/admin/installation.html
+    """
+    # Build URL with query parameters
+    params = {
+        "q": query,
+        "format": "json",
+        "language": language,
+        "safesearch": str(safesearch),
+    }
+    
+    if categories:
+        params["categories"] = ",".join(categories)
+    if engines:
+        params["engines"] = ",".join(engines)
+    if time_range:
+        params["time_range"] = time_range
+    
+    # Build URL
+    base_url = instance_url.rstrip("/")
+    query_string = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
+    url = f"{base_url}/search?{query_string}"
+    
+    headers = {
+        "User-Agent": "ClawdBot-WebSearchPlus/2.5",
+        "Accept": "application/json",
+    }
+    
+    # Make GET request
+    req = Request(url, headers=headers, method="GET")
+    
+    try:
+        with urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else str(e)
+        try:
+            error_json = json.loads(error_body)
+            error_detail = error_json.get("error") or error_json.get("message") or error_body
+        except json.JSONDecodeError:
+            error_detail = error_body[:500]
+        
+        error_messages = {
+            403: "JSON API disabled on this SearXNG instance. Enable 'json' in search.formats in settings.yml",
+            404: "SearXNG instance not found. Check your instance URL.",
+            500: "SearXNG server error. Check instance health.",
+            503: "SearXNG service unavailable."
+        }
+        friendly_msg = error_messages.get(e.code, f"SearXNG error: {error_detail}")
+        raise Exception(f"{friendly_msg} (HTTP {e.code})")
+    except URLError as e:
+        raise Exception(f"Cannot reach SearXNG instance at {instance_url}. Error: {e.reason}")
+    except TimeoutError:
+        raise Exception(f"SearXNG request timed out after 30s. Check instance health.")
+    
+    # Parse results
+    raw_results = data.get("results", [])
+    
+    # Normalize results to unified format
+    results = []
+    engines_used = set()
+    for i, item in enumerate(raw_results[:max_results]):
+        engine = item.get("engine", "unknown")
+        engines_used.add(engine)
+        
+        results.append({
+            "title": item.get("title", ""),
+            "url": item.get("url", ""),
+            "snippet": item.get("content", ""),
+            "score": round(item.get("score", 1.0 - i * 0.05), 3),
+            "engine": engine,
+            "category": item.get("category", "general"),
+            "date": item.get("publishedDate"),
+        })
+    
+    # Build answer from answers, infoboxes, or first result
+    answer = ""
+    if data.get("answers"):
+        answer = data["answers"][0] if isinstance(data["answers"][0], str) else str(data["answers"][0])
+    elif data.get("infoboxes"):
+        infobox = data["infoboxes"][0]
+        answer = infobox.get("content", "") or infobox.get("infobox", "")
+    elif results:
+        answer = results[0]["snippet"]
+    
+    return {
+        "provider": "searxng",
+        "query": query,
+        "results": results,
+        "images": [],
+        "answer": answer,
+        "suggestions": data.get("suggestions", []),
+        "corrections": data.get("corrections", []),
+        "metadata": {
+            "number_of_results": data.get("number_of_results"),
+            "engines_used": list(engines_used),
+            "instance_url": instance_url,
+        }
+    }
+
+
+# =============================================================================
 # CLI
 # =============================================================================
 
@@ -1108,7 +1560,7 @@ Full docs: See README.md and SKILL.md
     # Common arguments
     parser.add_argument(
         "--provider", "-p", 
-        choices=["serper", "tavily", "exa", "auto"],
+        choices=["serper", "tavily", "exa", "you", "searxng", "auto"],
         help="Search provider (auto=intelligent routing)"
     )
     parser.add_argument(
@@ -1185,6 +1637,57 @@ Full docs: See README.md and SKILL.md
     parser.add_argument("--start-date")
     parser.add_argument("--end-date")
     parser.add_argument("--similar-url")
+    
+    # You.com-specific
+    you_config = config.get("you", {})
+    parser.add_argument(
+        "--you-safesearch",
+        default=you_config.get("safesearch", "moderate"),
+        choices=["off", "moderate", "strict"],
+        help="You.com SafeSearch filter"
+    )
+    parser.add_argument(
+        "--freshness",
+        choices=["day", "week", "month", "year"],
+        help="Filter results by recency (You.com/Serper)"
+    )
+    parser.add_argument(
+        "--livecrawl",
+        choices=["web", "news", "all"],
+        help="You.com: fetch full page content"
+    )
+    parser.add_argument(
+        "--include-news",
+        action="store_true",
+        default=True,
+        help="You.com: include news results (default: true)"
+    )
+    
+    # SearXNG-specific
+    searxng_config = config.get("searxng", {})
+    parser.add_argument(
+        "--searxng-url",
+        default=searxng_config.get("instance_url"),
+        help="SearXNG instance URL (e.g., https://searx.example.com)"
+    )
+    parser.add_argument(
+        "--searxng-safesearch",
+        type=int,
+        default=searxng_config.get("safesearch", 0),
+        choices=[0, 1, 2],
+        help="SearXNG SafeSearch: 0=off, 1=moderate, 2=strict"
+    )
+    parser.add_argument(
+        "--engines",
+        nargs="+",
+        default=searxng_config.get("engines"),
+        help="SearXNG: specific engines to use (e.g., google bing duckduckgo)"
+    )
+    parser.add_argument(
+        "--categories",
+        nargs="+",
+        help="SearXNG: search categories (general, images, news, videos, etc.)"
+    )
     
     # Domain filters
     parser.add_argument("--include-domains", nargs="+")
@@ -1283,6 +1786,31 @@ Full docs: See README.md and SKILL.md
                 similar_url=args.similar_url,
                 include_domains=args.include_domains,
                 exclude_domains=args.exclude_domains,
+            )
+        elif prov == "you":
+            return search_you(
+                query=args.query,
+                api_key=key,
+                max_results=args.max_results,
+                country=args.country,
+                language=args.language,
+                freshness=args.freshness,
+                safesearch=args.you_safesearch,
+                include_news=args.include_news,
+                livecrawl=args.livecrawl,
+            )
+        elif prov == "searxng":
+            # For SearXNG, 'key' is actually the instance URL
+            instance_url = args.searxng_url or key
+            return search_searxng(
+                query=args.query,
+                instance_url=instance_url,
+                max_results=args.max_results,
+                categories=args.categories,
+                engines=args.engines,
+                language=args.language,
+                time_range=args.time_range,
+                safesearch=args.searxng_safesearch,
             )
         else:
             raise ValueError(f"Unknown provider: {prov}")

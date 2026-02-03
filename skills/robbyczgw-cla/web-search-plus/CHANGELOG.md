@@ -1,5 +1,172 @@
 # Changelog - Web Search Plus
 
+## [2.5.0] - 2026-02-03
+
+### 🆕 New Provider: SearXNG (Privacy-First Meta-Search)
+
+Added SearXNG as the 5th search provider, focused on privacy and self-hosted search:
+
+#### Features
+- **Privacy-Preserving**: No tracking, no profiling — your searches stay private
+- **Multi-Source Aggregation**: Queries 70+ upstream engines (Google, Bing, DuckDuckGo, etc.)
+- **$0 API Cost**: Self-hosted = unlimited queries with no API fees
+- **Diverse Results**: Get perspectives from multiple search engines in one query
+- **Customizable**: Choose which engines to use, set SafeSearch levels, language preferences
+
+#### Auto-Routing Signals
+New privacy/multi-source intent detection routes to SearXNG for:
+- Privacy queries: "private", "anonymous", "without tracking", "no tracking"
+- Multi-source: "aggregate results", "multiple sources", "diverse perspectives"
+- Budget/free: "free search", "no api cost", "self-hosted search"
+- German: "privat", "anonym", "ohne tracking", "verschiedene quellen"
+
+#### Usage Examples
+```bash
+# Auto-routed
+python3 scripts/search.py -q "search privately without tracking"  # → SearXNG
+
+# Explicit
+python3 scripts/search.py -p searxng -q "linux distros"
+python3 scripts/search.py -p searxng -q "AI news" --engines "google,bing,duckduckgo"
+python3 scripts/search.py -p searxng -q "privacy tools" --searxng-safesearch 2
+```
+
+#### Configuration
+```json
+{
+  "searxng": {
+    "instance_url": "https://your-instance.example.com",
+    "safesearch": 0,
+    "engines": null,
+    "language": "en"
+  }
+}
+```
+
+#### Setup
+SearXNG requires a self-hosted instance with JSON format enabled:
+```bash
+# Docker setup (5 minutes)
+docker run -d -p 8080:8080 searxng/searxng
+
+# Enable JSON in settings.yml:
+# search:
+#   formats: [html, json]
+
+# Set instance URL
+export SEARXNG_INSTANCE_URL="http://localhost:8080"
+```
+
+See: https://docs.searxng.org/admin/installation.html
+
+### 📊 Updated Provider Comparison
+
+| Feature | Serper | Tavily | Exa | You.com | SearXNG |
+|---------|:------:|:------:|:---:|:-------:|:-------:|
+| Privacy-First | ✗ | ✗ | ✗ | ✗ | ✓✓ |
+| Self-Hosted | ✗ | ✗ | ✗ | ✗ | ✓ |
+| API Cost | $$ | $$ | $$ | $ | **FREE** |
+| Multi-Engine | ✗ | ✗ | ✗ | ✗ | ✓ (70+) |
+
+### 🔧 Technical Changes
+
+- Added `search_searxng()` function with full error handling
+- Added `PRIVACY_SIGNALS` to QueryAnalyzer for auto-routing
+- Updated setup wizard with SearXNG option (instance URL validation)
+- Updated config.example.json with searxng section
+- New CLI args: `--searxng-url`, `--searxng-safesearch`, `--engines`, `--categories`
+
+---
+
+## [2.4.4] - 2026-02-03
+
+### 📝 Documentation: Provider Count Fix
+
+- **Fixed:** "You can use 1, 2, or all 3" → "1, 2, 3, or all 4" (we have 4 providers now!)
+- **Impact:** Accurate documentation for setup wizard
+
+## [2.4.3] - 2026-02-03
+
+### 📝 Documentation: Updated README
+
+- **Added:** "NEW in v2.4.2" badge for You.com in SKILL.md
+- **Impact:** ClawHub README now properly highlights You.com as new feature
+
+## [2.4.2] - 2026-02-03
+
+### 🐛 Critical Fix: You.com API Configuration
+
+- **Fixed:** Incorrect hostname (`api.ydc-index.io` → `ydc-index.io`)
+- **Fixed:** Incorrect header name (`X-API-Key` → `X-API-KEY` uppercase)
+- **Impact:** You.com now works correctly - was giving 403 Forbidden before
+- **Status:** ✅ Fully tested and working
+
+## [2.4.1] - 2026-02-03
+
+### 🐛 Bugfix: You.com URL Encoding
+
+- **Fixed:** URL encoding for You.com queries - spaces and special characters now properly encoded
+- **Impact:** Queries with spaces (e.g., "OpenClaw AI framework") work correctly now
+- **Technical:** Added `urllib.parse.quote` for parameter encoding
+
+## [2.4.0] - 2026-02-03
+
+### 🆕 New Provider: You.com
+
+Added You.com as the 4th search provider, optimized for RAG applications and real-time information:
+
+#### Features
+- **LLM-Ready Snippets**: Pre-extracted, query-aware text excerpts perfect for feeding into AI models
+- **Unified Web + News**: Get both web pages and news articles in a single API call
+- **Live Crawling**: Fetch full page content on-demand in Markdown format (`--livecrawl`)
+- **Automatic News Classification**: Intelligently includes news results based on query intent
+- **Freshness Controls**: Filter by recency (day, week, month, year, or date range)
+- **SafeSearch Support**: Content filtering (off, moderate, strict)
+
+#### Auto-Routing Signals
+New RAG/Real-time intent detection routes to You.com for:
+- RAG context queries: "summarize", "key points", "tldr", "context for"
+- Real-time info: "latest news", "current status", "right now", "what's happening"
+- Information synthesis: "updates on", "situation", "main takeaways"
+
+#### Usage Examples
+```bash
+# Auto-routed
+python3 scripts/search.py -q "summarize key points about AI regulation"  # → You.com
+
+# Explicit
+python3 scripts/search.py -p you -q "climate change" --livecrawl all
+python3 scripts/search.py -p you -q "tech news" --freshness week
+```
+
+#### Configuration
+```json
+{
+  "you": {
+    "country": "US",
+    "language": "en",
+    "safesearch": "moderate",
+    "include_news": true
+  }
+}
+```
+
+#### API Key Setup
+```bash
+export YOU_API_KEY="your-key"  # Get from https://api.you.com
+```
+
+### 📊 Updated Provider Comparison
+
+| Feature | Serper | Tavily | Exa | You.com |
+|---------|:------:|:------:|:---:|:-------:|
+| Speed | ⚡⚡⚡ | ⚡⚡ | ⚡⚡ | ⚡⚡⚡ |
+| News Integration | ✓ | ✗ | ✗ | ✓ |
+| RAG-Optimized | ✗ | ✓ | ✗ | ✓✓ |
+| Full Page Content | ✗ | ✓ | ✓ | ✓ |
+
+---
+
 ## [2.1.5] - 2026-01-27
 
 ### 📝 Documentation

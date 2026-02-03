@@ -11,7 +11,9 @@
     "provider_priority": [
       "serper",
       "tavily",
-      "exa"
+      "exa",
+      "you",
+      "searxng"
     ],
     "disabled_providers": [],
     "confidence_threshold": 0.3,
@@ -133,6 +135,66 @@
         "konkurrenten",
         "vergleichbar mit",
         "andere unternehmen"
+      ],
+      "you": [
+        "rag",
+        "context for",
+        "summarize",
+        "brief",
+        "quick overview",
+        "tldr",
+        "key points",
+        "key facts",
+        "main points",
+        "main takeaways",
+        "latest news",
+        "latest updates",
+        "current events",
+        "current situation",
+        "current status",
+        "right now",
+        "as of today",
+        "up to date",
+        "real time",
+        "what's happening",
+        "what's the latest",
+        "updates on",
+        "status of",
+        "zusammenfassung",
+        "aktuelle nachrichten",
+        "neueste updates"
+      ],
+      "searxng": [
+        "private",
+        "privately",
+        "anonymous",
+        "anonymously",
+        "without tracking",
+        "no tracking",
+        "privacy",
+        "privacy-focused",
+        "privacy-first",
+        "duckduckgo alternative",
+        "private search",
+        "aggregate results",
+        "multiple sources",
+        "diverse results",
+        "diverse perspectives",
+        "meta search",
+        "all engines",
+        "free search",
+        "no api cost",
+        "self-hosted search",
+        "zero cost",
+        "privat",
+        "anonym",
+        "ohne tracking",
+        "datenschutz",
+        "verschiedene quellen",
+        "aus mehreren quellen",
+        "alle suchmaschinen",
+        "kostenlose suche",
+        "keine api kosten"
       ]
     }
   },
@@ -153,5 +215,18 @@
     "category": null,
     "include_domains": [],
     "exclude_domains": []
+  },
+  "you": {
+    "country": "US",
+    "language": "en",
+    "safesearch": "moderate",
+    "include_news": true
+  },
+  "searxng": {
+    "$comment": "SearXNG requires a self-hosted instance. No API key needed, just your instance URL.",
+    "instance_url": null,
+    "safesearch": 0,
+    "engines": null,
+    "language": "en"
   }
 }
