@@ -1,16 +1,16 @@
 ---
-name: moltbot-security
-description: Security hardening guide for Moltbot/Clawdbot. Lock down your gateway, fix file permissions, set up auth, configure firewalls. Based on real vulnerability research.
-version: 1.0.0
+name: moltbot, openclaw-security
+description: Security hardening guide for AI agents (OpenClaw/Moltbot/OpenClaw). Lock down gateway, fix permissions, set up auth. Based on real vulnerability research.
+version: 1.0.1
 author: NextFrontierBuilds
-keywords: moltbot, clawdbot, security, hardening, gateway, firewall, tailscale, ssh, authentication, ai-agent
+keywords: moltbot, openclaw, openclaw, security, hardening, gateway, firewall, tailscale, ssh, authentication, ai-agent, ai-coding, claude, cursor, devops, infosec, vibe-coding
 ---
 
 # Moltbot Security Guide
 
 Your Moltbot gateway was designed for local use. When exposed to the internet without proper security, attackers can access your API keys, private messages, and full system access.
 
-**Based on:** Real vulnerability research that found 1,673+ exposed Clawdbot/Moltbot gateways on Shodan.
+**Based on:** Real vulnerability research that found 1,673+ exposed OpenClaw/Moltbot gateways on Shodan.
 
 ---
 
@@ -41,13 +41,13 @@ When your gateway is publicly accessible:
 Run this to check your current security posture:
 
 ```bash
-clawdbot security audit --deep
+openclaw security audit --deep
 ```
 
 Auto-fix issues:
 
 ```bash
-clawdbot security audit --deep --fix
+openclaw security audit --deep --fix
 ```
 
 ---
@@ -56,7 +56,7 @@ clawdbot security audit --deep --fix
 
 **What this does:** Prevents the gateway from accepting connections from other machines.
 
-Check your `~/.clawdbot/clawdbot.json`:
+Check your `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -127,26 +127,26 @@ export CLAWDBOT_GATEWAY_PASSWORD="your-secure-password-here"
 **What this does:** Ensures only you can read sensitive config files.
 
 ```bash
-chmod 700 ~/.clawdbot
-chmod 600 ~/.clawdbot/clawdbot.json
-chmod 700 ~/.clawdbot/credentials
+chmod 700 ~/.openclaw
+chmod 600 ~/.openclaw/openclaw.json
+chmod 700 ~/.openclaw/credentials
 ```
 
 **Permission meanings:**
 - `700` = Only owner can access folder
 - `600` = Only owner can read/write file
 
-Or let Clawdbot fix it:
+Or let OpenClaw fix it:
 
 ```bash
-clawdbot security audit --fix
+openclaw security audit --fix
 ```
 
 ---
 
 ## Step 4: Disable Network Broadcasting
 
-**What this does:** Stops Clawdbot from announcing itself via mDNS/Bonjour.
+**What this does:** Stops OpenClaw from announcing itself via mDNS/Bonjour.
 
 Add to your shell config (`~/.zshrc` or `~/.bashrc`):
 
@@ -189,7 +189,7 @@ sudo apt-get install -y nodejs
 
 ## Step 6: Set Up Tailscale (Remote Access)
 
-**What this does:** Creates encrypted tunnel between your devices. Access Clawdbot from anywhere without public exposure.
+**What this does:** Creates encrypted tunnel between your devices. Access OpenClaw from anywhere without public exposure.
 
 **Install Tailscale:**
 
@@ -202,7 +202,7 @@ sudo tailscale up
 brew install tailscale
 ```
 
-**Configure Clawdbot for Tailscale:**
+**Configure OpenClaw for Tailscale:**
 
 ```json
 {
@@ -329,7 +329,7 @@ Original article: https://x.com/nickspisak_/status/2016195582180700592
 ## Installation
 
 ```bash
-clawdhub install NextFrontierBuilds/moltbot-security
+clawdhub install NextFrontierBuilds/moltbot, openclaw-security
 ```
 
 Built by [@NextXFrontier](https://x.com/NextXFrontier)

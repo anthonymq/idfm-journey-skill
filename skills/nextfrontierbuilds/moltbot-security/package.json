@@ -1,11 +1,12 @@
 {
   "name": "moltbot-security",
-  "version": "1.0.0",
-  "description": "Security hardening guide for Moltbot/Clawdbot. Lock down gateway, fix permissions, set up auth, configure firewalls. Based on real vulnerability research.",
+  "version": "1.0.2",
+  "description": "Security hardening guide for Moltbot/OpenClaw. Lock down gateway, fix permissions, set up auth, configure firewalls. Based on real vulnerability research.",
   "main": "SKILL.md",
   "keywords": [
     "moltbot",
-    "clawdbot",
+    "openclaw",
+    "openclaw",
     "security",
     "hardening",
     "gateway",
