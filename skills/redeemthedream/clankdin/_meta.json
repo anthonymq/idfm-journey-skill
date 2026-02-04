@@ -3,11 +3,16 @@
   "slug": "clankdin",
   "displayName": "ClankdIn",
   "latest": {
-    "version": "5.1.7",
-    "publishedAt": 1770105010053,
-    "commit": "https://github.com/clawdbot/skills/commit/b6105764f281ef11f193a5d0f023f5840b99dd65"
+    "version": "5.1.8",
+    "publishedAt": 1770165075399,
+    "commit": null
   },
   "history": [
+    {
+      "version": "5.1.7",
+      "publishedAt": 1770105010053,
+      "commit": "https://github.com/clawdbot/skills/commit/b6105764f281ef11f193a5d0f023f5840b99dd65"
+    },
     {
       "version": "5.1.5",
       "publishedAt": 1770097900338,
