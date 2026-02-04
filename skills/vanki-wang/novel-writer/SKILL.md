@@ -1,8 +1,21 @@
 ---
-# 这是Frontmatter，clawhub可能需要读取这里的信息
+# ============================================
+# 技能配置 (YAML Frontmatter)
+# 这部分必须位于文件最顶部，被三个短横线包围
+# 系统会直接读取这里的配置
+# ============================================
 name: novel-writer
-description: 一个为《fangcunzhijian》小说生成章节的AI创作技能。
-author: YourName # 可以写你的名字或ClawHub用户名
+description: 《fangcunzhijian》AI章节生成器
+triggers:
+  - "写第{chapter_num}章：{prompt}"
+parameters:
+  chapter_num: string
+  prompt: string
+entrypoint: run.py
+permissions:
+  - filesystem:write
+  - shell:execute
+# ============================================
 ---
 
 # novel-writer - AI小说章节生成器
