@@ -1,6 +1,6 @@
 ---
 name: idfm-journey
-description: Query Île-de-France Mobilités (IDFM) PRIM/Navitia for place resolution, journey planning, and disruptions/incident checks. Use when asked to find routes in Île-de-France (e.g., "itinéraire de X à Y"), resolve station/stop ids, or check RER/metro line disruptions, and you have an IDFM PRIM API key.
+description: Query Île-de-France Mobilités (IDFM) PRIM/Navitia for Paris + suburbs public transport (Île-de-France) — place resolution, journey planning, and disruptions/incident checks. Use when asked to find routes in Île-de-France (e.g., "itinéraire de X à Y"), resolve station/stop ids, or check RER/metro line disruptions, and you have an IDFM PRIM API key.
 ---
 
 # IDFM Journey (PRIM/Navitia)
